@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="ARTEweb · Estudio de diseño y desarrollo web artístico. Creamos experiencias digitales únicas, inmersivas y memorables." />
+<meta name="keywords" content="ARTEweb, diseño web, desarrollo web, portafolio, arte digital, three.js, web artística" />
+<meta property="og:title" content="ARTEweb · Estudio Digital Artístico" />
+<meta property="og:description" content="Diseñamos webs que se sienten como arte. Experiencias inmersivas, fluidas y memorables." />
+<title>ARTEweb · Estudio Digital Artístico</title>
+
+<!-- Tailwind -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- Tipografía editorial distintiva: Fraunces (display serif con carácter) + Manrope (body limpia) + Instrument Serif (acentos) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,800;0,9..144,900;1,9..144,300;1,9..144,400;1,9..144,500&family=Instrument+Serif:ital@0;1&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!-- Three.js + GSAP + Lenis (scroll suave) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/studio-freight/lenis@1.0.42/bundled/lenis.min.js"></script>
+
+<style>
+  :root {
+    --bg: #0a0908;
+    --bg-soft: #14110f;
+    --ink: #f5f1ea;
+    --ink-soft: #b8b0a2;
+    --accent: #ff5e3a;       /* naranja vivo, color firma */
+    --accent-2: #c9b8ff;     /* lila etéreo */
+    --accent-3: #7afdd6;     /* menta líquida */
+    --line: rgba(245,241,234,0.12);
+  }
+
+  * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  html, body { background: var(--bg); color: var(--ink); }
+  body { font-family: 'Manrope', sans-serif; cursor: none; overflow-x: hidden; }
+
+  .font-display { font-family: 'Fraunces', serif; font-variation-settings: "opsz" 144, "SOFT" 100; }
+  .font-italic-serif { font-family: 'Instrument Serif', serif; font-style: italic; }
+
+  /* Cursor personalizado */
+  .cursor-dot, .cursor-ring {
+    position: fixed; top: 0; left: 0; pointer-events: none; z-index: 9999;
+    transform: translate(-50%, -50%);
+    transition: transform 0.15s ease, width 0.3s ease, height 0.3s ease, background 0.3s ease;
+    will-change: transform;
+  }
+  .cursor-dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+  .cursor-ring { width: 36px; height: 36px; border: 1px solid var(--ink); border-radius: 50%; mix-blend-mode: difference; }
+  .cursor-ring.hover { width: 80px; height: 80px; background: var(--ink); }
+
+  /* Canvas 3D detrás del contenido */
+  #webgl-canvas {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  }
+
+  /* Grain overlay */
+  .grain::before {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 50;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    opacity: 0.07; mix-blend-mode: overlay;
+  }
+
+  /* Marquee (texto deslizante) */
+  @keyframes marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  .marquee-track { animation: marquee 40s linear infinite; }
+
+  /* Reveal para palabras / líneas */
+  .reveal-line { overflow: hidden; }
+  .reveal-line > * { display: inline-block; transform: translateY(110%); }
+
+  /* Vidrio líquido para tarjetas */
+  .glass {
+    background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+    border: 1px solid var(--line);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Botón outline magnético */
+  .btn-magnetic {
+    position: relative; isolation: isolate; overflow: hidden;
+    transition: color 0.4s ease;
+  }
+  .btn-magnetic::before {
+    content:''; position:absolute; inset:0; background: var(--accent);
+    transform: translateY(101%); transition: transform 0.5s cubic-bezier(.7,0,.2,1);
+    z-index: -1;
+  }
+  .btn-magnetic:hover { color: var(--bg); }
+  .btn-magnetic:hover::before { transform: translateY(0); }
+
+  /* Project hover */
+  .project-card { transition: transform 0.6s cubic-bezier(.2,.8,.2,1); }
+  .project-card:hover { transform: translateY(-6px); }
+  .project-img { transition: transform 1.2s cubic-bezier(.2,.8,.2,1), filter 0.6s ease; filter: grayscale(0.3) contrast(1.05); }
+  .project-card:hover .project-img { transform: scale(1.04); filter: grayscale(0) contrast(1.1); }
+
+  /* Tag (chips) */
+  .tag {
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px;
+    color: var(--ink-soft);
+  }
+
+  /* Línea animada bajo enlaces */
+  .link-underline { position: relative; }
+  .link-underline::after {
+    content:''; position:absolute; left:0; bottom:-3px; height:1px; width:100%;
+    background: currentColor; transform: scaleX(0); transform-origin: right;
+    transition: transform 0.5s cubic-bezier(.7,0,.2,1);
+  }
+  .link-underline:hover::after { transform: scaleX(1); transform-origin: left; }
+
+  /* Scroll bar oculta */
+  ::-webkit-scrollbar { width: 0; height: 0; }
+
+  /* Hero gigante typography */
+  .hero-title {
+    font-size: clamp(64px, 14vw, 220px);
+    line-height: 0.86;
+    letter-spacing: -0.04em;
+    font-weight: 500;
+  }
+
+  .stagger-mask { overflow: hidden; }
+
+  @media (max-width: 768px) {
+    body { cursor: auto; }
+    .cursor-dot, .cursor-ring { display: none; }
+  }
+</style>
+</head>
+<body class="grain">
+
+<!-- Cursor personalizado -->
+<div class="cursor-dot"></div>
+<div class="cursor-ring"></div>
+
+<!-- Canvas 3D -->
+<canvas id="webgl-canvas"></canvas>
+
+<!-- NAV -->
+<header class="fixed top-0 left-0 right-0 z-40 px-6 md:px-10 py-6 flex items-center justify-between mix-blend-difference">
+  <a href="#top" class="font-display text-xl tracking-tight">
+    ARTE<span class="font-italic-serif" style="color:var(--accent)">web</span>
+  </a>
+  <nav class="hidden md:flex gap-8 text-sm tracking-wide">
+    <a href="#trabajos" class="link-underline">Trabajos</a>
+    <a href="#estudio" class="link-underline">Estudio</a>
+    <a href="#proceso" class="link-underline">Proceso</a>
+    <a href="#contacto" class="link-underline">Contacto</a>
+  </nav>
+  <a href="#contacto" class="text-sm tracking-wide link-underline hidden md:block">Empezar proyecto →</a>
+</header>
+
+<!-- HERO -->
+<section id="top" class="relative min-h-screen flex flex-col justify-end px-6 md:px-10 pb-12 z-10">
+  <!-- Esquinas info -->
+  <div class="absolute top-28 left-6 md:left-10 text-xs tracking-[0.2em] uppercase text-[color:var(--ink-soft)]">
+    <div>Estudio Digital</div>
+    <div>Est. 2024 — Madrid</div>
+  </div>
+  <div class="absolute top-28 right-6 md:right-10 text-xs tracking-[0.2em] uppercase text-[color:var(--ink-soft)] text-right">
+    <div>Diseño · Código</div>
+    <div>Arte · Movimiento</div>
+  </div>
+
+  <div class="max-w-[1400px]">
+    <div class="reveal-line"><h1 class="hero-title font-display"><span>Diseñamos</span></h1></div>
+    <div class="reveal-line"><h1 class="hero-title font-display"><span class="font-italic-serif italic" style="color:var(--accent)">webs</span></h1></div>
+    <div class="reveal-line"><h1 class="hero-title font-display"><span>que se sienten</span></h1></div>
+    <div class="reveal-line"><h1 class="hero-title font-display"><span>como <em class="font-italic-serif" style="color:var(--accent-2)">arte</em>.</span></h1></div>
+
+    <div class="mt-10 grid grid-cols-1 md:grid-cols-3 gap-8 items-end">
+      <p class="text-[color:var(--ink-soft)] max-w-md text-base leading-relaxed md:col-span-2">
+        Somos <span class="text-[color:var(--ink)]">ARTEweb</span> — un estudio independiente que mezcla diseño, código y movimiento para crear experiencias digitales <span class="font-italic-serif italic">inolvidables</span>. Hacemos sitios que la gente recuerda.
+      </p>
+      <div class="flex gap-3 md:justify-end">
+        <a href="#trabajos" class="btn-magnetic px-6 py-3 border border-[color:var(--ink)] rounded-full text-sm tracking-wide">Ver trabajos</a>
+        <a href="#contacto" class="btn-magnetic px-6 py-3 border border-[color:var(--ink)] rounded-full text-sm tracking-wide">Contacto</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Indicador scroll -->
+  <div class="absolute bottom-6 left-1/2 -translate-x-1/2 text-xs tracking-[0.3em] uppercase text-[color:var(--ink-soft)] flex flex-col items-center gap-2">
+    <span>scroll</span>
+    <div class="w-px h-12 bg-[color:var(--ink-soft)] relative overflow-hidden">
+      <div class="absolute inset-0 bg-[color:var(--accent)] animate-[slideDown_2s_ease-in-out_infinite]"></div>
+    </div>
+  </div>
+</section>
+
+<style>
+  @keyframes slideDown {
+    0% { transform: translateY(-100%); }
+    50% { transform: translateY(0); }
+    100% { transform: translateY(100%); }
+  }
+</style>
+
+<!-- MARQUEE -->
+<section class="relative z-10 py-12 border-y border-[color:var(--line)] overflow-hidden bg-[color:var(--bg)]">
+  <div class="marquee-track flex whitespace-nowrap font-display text-[80px] md:text-[120px] leading-none">
+    <span class="px-8">Diseño Web</span><span class="px-8 font-italic-serif" style="color:var(--accent)">·</span>
+    <span class="px-8">Desarrollo</span><span class="px-8 font-italic-serif" style="color:var(--accent-2)">·</span>
+    <span class="px-8 font-italic-serif italic">Arte Digital</span><span class="px-8" style="color:var(--accent)">·</span>
+    <span class="px-8">Branding</span><span class="px-8 font-italic-serif" style="color:var(--accent-3)">·</span>
+    <span class="px-8">Animación 3D</span><span class="px-8 font-italic-serif" style="color:var(--accent)">·</span>
+    <!-- duplicado para loop -->
+    <span class="px-8">Diseño Web</span><span class="px-8 font-italic-serif" style="color:var(--accent)">·</span>
+    <span class="px-8">Desarrollo</span><span class="px-8 font-italic-serif" style="color:var(--accent-2)">·</span>
+    <span class="px-8 font-italic-serif italic">Arte Digital</span><span class="px-8" style="color:var(--accent)">·</span>
+    <span class="px-8">Branding</span><span class="px-8 font-italic-serif" style="color:var(--accent-3)">·</span>
+    <span class="px-8">Animación 3D</span><span class="px-8" style="color:var(--accent)">·</span>
+  </div>
+</section>
+
+<!-- ESTUDIO / MANIFIESTO -->
+<section id="estudio" class="relative z-10 px-6 md:px-10 py-32 md:py-48">
+  <div class="max-w-[1400px] mx-auto grid grid-cols-12 gap-6">
+    <div class="col-span-12 md:col-span-3">
+      <div class="text-xs tracking-[0.3em] uppercase text-[color:var(--ink-soft)] sticky top-32">
+        <div class="mb-2">[01] —</div>
+        <div>Manifiesto</div>
+      </div>
+    </div>
+    <div class="col-span-12 md:col-span-9">
+      <p class="font-display text-3xl md:text-5xl leading-[1.15] tracking-tight reveal-text">
+        Creemos que una web debería <em class="font-italic-serif" style="color:var(--accent)">respirar</em>. Que cada scroll cuente una historia. Que el diseño y el código sean <em class="font-italic-serif" style="color:var(--accent-2)">indistinguibles</em> del arte. Por eso ARTEweb existe: para los proyectos que se niegan a ser <span class="line-through opacity-60">otra plantilla más</span> <span style="color:var(--accent-3)">algo único</span>.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- TRABAJOS -->
+<section id="trabajos" class="relative z-10 px-6 md:px-10 py-20 md:py-32">
+  <div class="max-w-[1400px] mx-auto">
+    <div class="flex justify-between items-end mb-16 md:mb-24">
+      <div>
+        <div class="text-xs tracking-[0.3em] uppercase text-[color:var(--ink-soft)] mb-4">[02] — Trabajos seleccionados</div>
+        <h2 class="font-display text-5xl md:text-7xl leading-none tracking-tight">
+          Proyectos <span class="font-italic-serif italic" style="color:var(--accent)">recientes</span>
+        </h2>
+      </div>
+      <div class="hidden md:block text-sm text-[color:var(--ink-soft)]">2024 — 2026</div>
+    </div>
+
+    <!-- GRID -->
+    <div class="grid grid-cols-12 gap-6 md:gap-10">
+
+      <!-- Project 01 -->
+      <a href="https://00010-0.github.io/enlazesARTEwebdemo/" target="_blank" rel="noopener" class="project-card col-span-12 md:col-span-7 group block">
+        <div class="relative overflow-hidden rounded-2xl aspect-[16/10] glass">
+          <iframe src="https://00010-0.github.io/enlazesARTEwebdemo/" class="project-img w-full h-full border-0 pointer-events-none" loading="lazy" scrolling="no"></iframe>
+          <div class="absolute inset-0 bg-gradient-to-t from-[color:var(--bg)]/80 via-transparent to-transparent"></div>
+          <div class="absolute top-4 left-4 tag bg-[color:var(--bg)]/60">01 / Demo</div>
+          <div class="absolute bottom-4 right-4 w-12 h-12 rounded-full bg-[color:var(--accent)] flex items-center justify-center text-[color:var(--bg)] group-hover:rotate-45 transition-transform duration-500">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg>
+          </div>
+        </div>
+        <div class="mt-6 flex justify-between items-start">
+          <div>
+            <h3 class="font-display text-2xl md:text-3xl tracking-tight">Enlazes <span class="font-italic-serif italic">ARTEweb</span></h3>
+            <p class="text-[color:var(--ink-soft)] mt-2 text-sm">Hub de conexiones · Diseño interactivo</p>
+          </div>
+          <div class="flex gap-2 flex-wrap justify-end">
+            <span class="tag">Web</span>
+            <span class="tag">Interacción</span>
+          </div>
+        </div>
+      </a>
+
+      <!-- Project 02 -->
+      <a href="https://00010-0.github.io/demoARTEWEB/" target="_blank" rel="noopener" class="project-card col-span-12 md:col-span-5 group block">
+        <div class="relative overflow-hidden rounded-2xl aspect-[4/5] glass">
+          <iframe src="https://00010-0.github.io/demoARTEWEB/" class="project-img w-full h-full border-0 pointer-events-none" loading="lazy" scrolling="no"></iframe>
+          <div class="absolute inset-0 bg-gradient-to-t from-[color:var(--bg)]/80 via-transparent to-transparent"></div>
+          <div class="absolute top-4 left-4 tag bg-[color:var(--bg)]/60">02 / Demo</div>
+          <div class="absolute bottom-4 right-4 w-12 h-12 rounded-full bg-[color:var(--accent-2)] flex items-center justify-center text-[color:var(--bg)] group-hover:rotate-45 transition-transform duration-500">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg>
+          </div>
+        </div>
+        <div class="mt-6 flex justify-between items-start">
+          <div>
+            <h3 class="font-display text-2xl md:text-3xl tracking-tight">Demo <span class="font-italic-serif italic">ARTEweb</span></h3>
+            <p class="text-[color:var(--ink-soft)] mt-2 text-sm">Showcase visual · UX/UI</p>
+          </div>
+          <div class="flex gap-2 flex-wrap justify-end">
+            <span class="tag">UI</span>
+          </div>
+        </div>
+      </a>
+
+      <!-- Project 03 -->
+      <a href="https://00010-0.github.io/ARTEweb-enlace-2/" target="_blank" rel="noopener" class="project-card col-span-12 md:col-span-12 group block">
+        <div class="relative overflow-hidden rounded-2xl aspect-[21/9] glass">
+          <iframe src="https://00010-0.github.io/ARTEweb-enlace-2/" class="project-img w-full h-full border-0 pointer-events-none" loading="lazy" scrolling="no"></iframe>
+          <div class="absolute inset-0 bg-gradient-to-r from-[color:var(--bg)]/40 via-transparent to-[color:var(--bg)]/40"></div>
+          <div class="absolute inset-0 bg-gradient-to-t from-[color:var(--bg)]/80 via-transparent to-transparent"></div>
+          <div class="absolute top-4 left-4 tag bg-[color:var(--bg)]/60">03 / Demo</div>
+          <div class="absolute bottom-4 right-4 w-12 h-12 rounded-full bg-[color:var(--accent-3)] flex items-center justify-center text-[color:var(--bg)] group-hover:rotate-45 transition-transform duration-500">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg>
+          </div>
+          <div class="absolute bottom-8 left-8 max-w-md">
+            <h3 class="font-display text-3xl md:text-5xl tracking-tight">ARTEweb <span class="font-italic-serif italic">Enlace 02</span></h3>
+            <p class="text-[color:var(--ink-soft)] mt-2 text-sm">Plataforma de enlaces · Experiencia inmersiva</p>
+          </div>
+        </div>
+      </a>
+
+    </div>
+  </div>
+</section>
+
+<!-- PROCESO -->
+<section id="proceso" class="relative z-10 px-6 md:px-10 py-32 md:py-48">
+  <div class="max-w-[1400px] mx-auto">
+    <div class="grid grid-cols-12 gap-6 mb-16">
+      <div class="col-span-12 md:col-span-3">
+        <div class="text-xs tracking-[0.3em] uppercase text-[color:var(--ink-soft)]">[03] — Cómo trabajamos</div>
+      </div>
+      <div class="col-span-12 md:col-span-9">
+        <h2 class="font-display text-5xl md:text-7xl leading-none tracking-tight">
+          Un proceso <span class="font-italic-serif italic" style="color:var(--accent-2)">honesto</span>.
+        </h2>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-px bg-[color:var(--line)]">
+      <div class="bg-[color:var(--bg)] p-8 md:p-10 hover:bg-[color:var(--bg-soft)] transition-colors duration-500">
+        <div class="font-display text-6xl mb-6" style="color:var(--accent)">01</div>
+        <h3 class="font-display text-2xl mb-3">Escucha</h3>
+        <p class="text-[color:var(--ink-soft)] text-sm leading-relaxed">Conocemos tu marca, tu gente, tus objetivos. Sin plantillas, sin atajos.</p>
+      </div>
+      <div class="bg-[color:var(--bg)] p-8 md:p-10 hover:bg-[color:var(--bg-soft)] transition-colors duration-500">
+        <div class="font-display text-6xl mb-6" style="color:var(--accent-2)">02</div>
+        <h3 class="font-display text-2xl mb-3">Concepto</h3>
+        <p class="text-[color:var(--ink-soft)] text-sm leading-relaxed">Definimos una dirección artística clara. Un punto de vista, no una decoración.</p>
+      </div>
+      <div class="bg-[color:var(--bg)] p-8 md:p-10 hover:bg-[color:var(--bg-soft)] transition-colors duration-500">
+        <div class="font-display text-6xl mb-6" style="color:var(--accent-3)">03</div>
+        <h3 class="font-display text-2xl mb-3">Diseño</h3>
+        <p class="text-[color:var(--ink-soft)] text-sm leading-relaxed">Maquetamos cada píxel con cuidado obsesivo. Tipografía, ritmo, color, motion.</p>
+      </div>
+      <div class="bg-[color:var(--bg)] p-8 md:p-10 hover:bg-[color:var(--bg-soft)] transition-colors duration-500">
+        <div class="font-display text-6xl mb-6" style="color:var(--ink)">04</div>
+        <h3 class="font-display text-2xl mb-3">Código</h3>
+        <p class="text-[color:var(--ink-soft)] text-sm leading-relaxed">Construimos webs rápidas, accesibles y mantenibles. El arte también es ingeniería.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SERVICIOS chip list -->
+<section class="relative z-10 px-6 md:px-10 py-20">
+  <div class="max-w-[1400px] mx-auto">
+    <div class="flex flex-wrap gap-3 justify-center">
+      <span class="px-5 py-2.5 rounded-full border border-[color:var(--line)] text-sm hover:bg-[color:var(--ink)] hover:text-[color:var(--bg)] transition-all cursor-default">Diseño Web</span>
+      <span class="px-5 py-2.5 rounded-full border border-[color:var(--line)] text-sm hover:bg-[color:var(--ink)] hover:text-[color:var(--bg)] transition-all cursor-default font-italic-serif italic">Landings</span>
+      <span class="px-5 py-2.5 rounded-full border border-[color:var(--line)] text-sm hover:bg-[color:var(--ink)] hover:text-[color:var(--bg)] transition-all cursor-default">E-commerce</span>
+      <span class="px-5 py-2.5 rounded-full border border-[color:var(--line)] text-sm hover:bg-[color:var(--ink)] hover:text-[color:var(--bg)] transition-all cursor-default">Animaciones 3D</span>
+      <span class="px-5 py-2.5 rounded-full border border-[color:var(--line)] text-sm hover:bg-[color:var(--ink)] hover:text-[color:var(--bg)] transition-all cursor-default font-italic-serif italic">Identidad visual</span>
+      <span class="px-5 py-2.5 rounded-full border border-[color:var(--line)] text-sm hover:bg-[color:var(--ink)] hover:text-[color:var(--bg)] transition-all cursor-default">Webflow / React</span>
+      <span class="px-5 py-2.5 rounded-full border border-[color:var(--line)] text-sm hover:bg-[color:var(--ink)] hover:text-[color:var(--bg)] transition-all cursor-default">SEO técnico</span>
+      <span class="px-5 py-2.5 rounded-full border border-[color:var(--line)] text-sm hover:bg-[color:var(--ink)] hover:text-[color:var(--bg)] transition-all cursor-default font-italic-serif italic">Mantenimiento</span>
+    </div>
+  </div>
+</section>
+
+<!-- CTA / CONTACTO -->
+<section id="contacto" class="relative z-10 px-6 md:px-10 py-32 md:py-48">
+  <div class="max-w-[1400px] mx-auto text-center">
+    <div class="text-xs tracking-[0.3em] uppercase text-[color:var(--ink-soft)] mb-8">[04] — Empecemos</div>
+    <h2 class="font-display leading-[0.9] tracking-tight" style="font-size: clamp(56px, 12vw, 180px);">
+      ¿Tienes una <span class="font-italic-serif italic" style="color:var(--accent)">idea</span>?
+    </h2>
+    <h2 class="font-display leading-[0.9] tracking-tight mt-2" style="font-size: clamp(56px, 12vw, 180px);">
+      Hablemos.
+    </h2>
+
+    <div class="mt-16 flex flex-col items-center gap-6">
+      <a href="mailto:hola@arteweb.com" class="group inline-flex items-center gap-4 font-display text-3xl md:text-5xl tracking-tight">
+        <span class="link-underline">hola@arteweb.com</span>
+        <span class="w-12 h-12 rounded-full bg-[color:var(--accent)] flex items-center justify-center text-[color:var(--bg)] group-hover:rotate-45 transition-transform duration-500 text-base">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg>
+        </span>
+      </a>
+      <div class="flex gap-6 text-sm text-[color:var(--ink-soft)]">
+        <a href="#" class="link-underline">Instagram</a>
+        <a href="#" class="link-underline">Behance</a>
+        <a href="#" class="link-underline">LinkedIn</a>
+        <a href="https://github.com/00010-0" target="_blank" rel="noopener" class="link-underline">GitHub</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="relative z-10 px-6 md:px-10 py-10 border-t border-[color:var(--line)]">
+  <div class="max-w-[1400px] mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-xs tracking-[0.2em] uppercase text-[color:var(--ink-soft)]">
+    <div>© 2026 ARTEweb · Todos los derechos reservados</div>
+    <div class="font-display text-base normal-case tracking-normal">
+      ARTE<span class="font-italic-serif" style="color:var(--accent)">web</span>
+    </div>
+    <div>Madrid · España</div>
+  </div>
+</footer>
+
+<!-- ============== JS ============== -->
+<script>
+/* =========================================================
+   1. CURSOR personalizado
+========================================================= */
+const dot = document.querySelector('.cursor-dot');
+const ring = document.querySelector('.cursor-ring');
+let mouseX = 0, mouseY = 0, ringX = 0, ringY = 0;
+
+window.addEventListener('mousemove', e => {
+  mouseX = e.clientX; mouseY = e.clientY;
+  dot.style.transform = `translate(${mouseX}px, ${mouseY}px) translate(-50%, -50%)`;
+});
+function animateRing() {
+  ringX += (mouseX - ringX) * 0.18;
+  ringY += (mouseY - ringY) * 0.18;
+  ring.style.transform = `translate(${ringX}px, ${ringY}px) translate(-50%, -50%)`;
+  requestAnimationFrame(animateRing);
+}
+animateRing();
+
+document.querySelectorAll('a, button, .project-card').forEach(el => {
+  el.addEventListener('mouseenter', () => ring.classList.add('hover'));
+  el.addEventListener('mouseleave', () => ring.classList.remove('hover'));
+});
+
+/* =========================================================
+   2. LENIS scroll suave
+========================================================= */
+const lenis = new Lenis({ duration: 1.4, easing: t => Math.min(1, 1.001 - Math.pow(2, -10 * t)) });
+function raf(time) { lenis.raf(time); requestAnimationFrame(raf); }
+requestAnimationFrame(raf);
+
+/* =========================================================
+   3. THREE.JS — Burbujas 3D flotantes con distorsión
+========================================================= */
+const canvas = document.getElementById('webgl-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x000000, 0);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
+camera.position.z = 8;
+
+// Luces
+const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+scene.add(ambient);
+const dir1 = new THREE.DirectionalLight(0xff5e3a, 1.5); // naranja
+dir1.position.set(5, 5, 5); scene.add(dir1);
+const dir2 = new THREE.DirectionalLight(0xc9b8ff, 1.2); // lila
+dir2.position.set(-5, -3, 4); scene.add(dir2);
+const dir3 = new THREE.DirectionalLight(0x7afdd6, 0.8); // menta
+dir3.position.set(0, 5, -3); scene.add(dir3);
+
+// Shader de burbuja con distorsión orgánica + iridiscencia
+const bubbleVertex = `
+  varying vec3 vNormal;
+  varying vec3 vPos;
+  varying vec3 vViewPos;
+  uniform float uTime;
+  uniform float uDistort;
+
+  // Simplex noise mini
+  vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+  vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
+  vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
+  vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+  float snoise(vec3 v){
+    const vec2 C=vec2(1.0/6.0,1.0/3.0);
+    const vec4 D=vec4(0.0,0.5,1.0,2.0);
+    vec3 i=floor(v+dot(v,C.yyy));
+    vec3 x0=v-i+dot(i,C.xxx);
+    vec3 g=step(x0.yzx,x0.xyz);
+    vec3 l=1.0-g;
+    vec3 i1=min(g.xyz,l.zxy);
+    vec3 i2=max(g.xyz,l.zxy);
+    vec3 x1=x0-i1+C.xxx;
+    vec3 x2=x0-i2+C.yyy;
+    vec3 x3=x0-D.yyy;
+    i=mod289(i);
+    vec4 p=permute(permute(permute(
+      i.z+vec4(0.0,i1.z,i2.z,1.0))
+      +i.y+vec4(0.0,i1.y,i2.y,1.0))
+      +i.x+vec4(0.0,i1.x,i2.x,1.0));
+    float n_=0.142857142857;
+    vec3 ns=n_*D.wyz-D.xzx;
+    vec4 j=p-49.0*floor(p*ns.z*ns.z);
+    vec4 x_=floor(j*ns.z);
+    vec4 y_=floor(j-7.0*x_);
+    vec4 x=x_*ns.x+ns.yyyy;
+    vec4 y=y_*ns.x+ns.yyyy;
+    vec4 h=1.0-abs(x)-abs(y);
+    vec4 b0=vec4(x.xy,y.xy);
+    vec4 b1=vec4(x.zw,y.zw);
+    vec4 s0=floor(b0)*2.0+1.0;
+    vec4 s1=floor(b1)*2.0+1.0;
+    vec4 sh=-step(h,vec4(0.0));
+    vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;
+    vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+    vec3 p0=vec3(a0.xy,h.x);
+    vec3 p1=vec3(a0.zw,h.y);
+    vec3 p2=vec3(a1.xy,h.z);
+    vec3 p3=vec3(a1.zw,h.w);
+    vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+    p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
+    vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0);
+    m=m*m;
+    return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+  }
+
+  void main() {
+    float n = snoise(position * 1.2 + uTime * 0.25);
+    vec3 newPos = position + normal * n * uDistort;
+    vNormal = normalize(normalMatrix * normal);
+    vec4 mvPos = modelViewMatrix * vec4(newPos, 1.0);
+    vViewPos = -mvPos.xyz;
+    vPos = newPos;
+    gl_Position = projectionMatrix * mvPos;
+  }
+`;
+const bubbleFragment = `
+  varying vec3 vNormal;
+  varying vec3 vPos;
+  varying vec3 vViewPos;
+  uniform vec3 uColorA;
+  uniform vec3 uColorB;
+  uniform vec3 uColorC;
+  uniform float uTime;
+
+  void main() {
+    vec3 viewDir = normalize(vViewPos);
+    float fresnel = pow(1.0 - max(dot(vNormal, viewDir), 0.0), 2.5);
+
+    // gradiente iridiscente según ángulo
+    float t = dot(vNormal, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5;
+    vec3 grad = mix(uColorA, uColorB, t);
+    grad = mix(grad, uColorC, sin(uTime * 0.5 + vPos.x) * 0.5 + 0.5);
+
+    vec3 color = grad + fresnel * 0.6;
+    float alpha = fresnel * 0.95 + 0.15;
+
+    gl_FragColor = vec4(color, alpha);
+  }
+`;
+
+const bubbles = [];
+const palette = [
+  { a: new THREE.Color('#ff5e3a'), b: new THREE.Color('#c9b8ff'), c: new THREE.Color('#7afdd6') },
+  { a: new THREE.Color('#c9b8ff'), b: new THREE.Color('#ff5e3a'), c: new THREE.Color('#f5f1ea') },
+  { a: new THREE.Color('#7afdd6'), b: new THREE.Color('#ff5e3a'), c: new THREE.Color('#c9b8ff') },
+  { a: new THREE.Color('#f5f1ea'), b: new THREE.Color('#c9b8ff'), c: new THREE.Color('#7afdd6') },
+];
+
+function createBubble(radius, position, palIdx, distort) {
+  const geo = new THREE.IcosahedronGeometry(radius, 64);
+  const pal = palette[palIdx % palette.length];
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: bubbleVertex,
+    fragmentShader: bubbleFragment,
+    transparent: true,
+    uniforms: {
+      uTime: { value: 0 },
+      uDistort: { value: distort },
+      uColorA: { value: pal.a },
+      uColorB: { value: pal.b },
+      uColorC: { value: pal.c },
+    }
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(position);
+  mesh.userData = {
+    baseY: position.y,
+    speed: 0.3 + Math.random() * 0.5,
+    offset: Math.random() * Math.PI * 2,
+    rotSpeed: (Math.random() - 0.5) * 0.005
+  };
+  scene.add(mesh);
+  bubbles.push(mesh);
+  return mesh;
+}
+
+// Burbuja principal grande
+createBubble(2.2, new THREE.Vector3(3.5, 0, 0), 0, 0.35);
+// Burbujas medianas
+createBubble(1.0, new THREE.Vector3(-4, 1.5, -2), 1, 0.25);
+createBubble(0.8, new THREE.Vector3(4.5, -2.5, -1), 2, 0.3);
+createBubble(0.6, new THREE.Vector3(-3, -1.5, 1), 3, 0.2);
+// Pequeñas / partículas
+createBubble(0.35, new THREE.Vector3(1, 2.5, 1), 0, 0.15);
+createBubble(0.4, new THREE.Vector3(-1.5, 0.5, 2), 1, 0.18);
+createBubble(0.25, new THREE.Vector3(2, -1, 2), 2, 0.12);
+
+// Mouse parallax
+let targetX = 0, targetY = 0, currentX = 0, currentY = 0;
+window.addEventListener('mousemove', e => {
+  targetX = (e.clientX / window.innerWidth - 0.5) * 2;
+  targetY = (e.clientY / window.innerHeight - 0.5) * 2;
+});
+
+// Scroll-driven camera + bubble drift
+let scrollProgress = 0;
+lenis.on('scroll', ({ scroll, limit }) => {
+  scrollProgress = limit > 0 ? scroll / limit : 0;
+});
+
+const clock = new THREE.Clock();
+function tick() {
+  const t = clock.getElapsedTime();
+
+  bubbles.forEach((b, i) => {
+    b.material.uniforms.uTime.value = t;
+    // Floating
+    b.position.y = b.userData.baseY + Math.sin(t * b.userData.speed + b.userData.offset) * 0.3;
+    b.rotation.y += b.userData.rotSpeed;
+    b.rotation.x += b.userData.rotSpeed * 0.7;
+  });
+
+  // Parallax suave
+  currentX += (targetX - currentX) * 0.05;
+  currentY += (targetY - currentY) * 0.05;
+  camera.position.x = currentX * 0.6;
+  camera.position.y = -currentY * 0.4 + scrollProgress * -3;
+
+  // Rotación de toda la escena con scroll para sensación cinematográfica
+  scene.rotation.y = scrollProgress * Math.PI * 0.4;
+  scene.rotation.x = scrollProgress * Math.PI * 0.1;
+
+  camera.lookAt(0, 0, 0);
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+tick();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* =========================================================
+   4. GSAP — Reveals al cargar y al hacer scroll
+========================================================= */
+gsap.registerPlugin(ScrollTrigger);
+
+// Hero reveal
+gsap.to('.reveal-line > *', {
+  y: 0,
+  duration: 1.4,
+  ease: 'expo.out',
+  stagger: 0.12,
+  delay: 0.3
+});
+
+// Reveal text con scroll
+gsap.utils.toArray('.reveal-text').forEach(el => {
+  gsap.from(el, {
+    opacity: 0,
+    y: 60,
+    duration: 1.2,
+    ease: 'power3.out',
+    scrollTrigger: { trigger: el, start: 'top 85%' }
+  });
+});
+
+// Project cards reveal
+gsap.utils.toArray('.project-card').forEach((el, i) => {
+  gsap.from(el, {
+    opacity: 0,
+    y: 80,
+    duration: 1.1,
+    ease: 'power3.out',
+    delay: i * 0.1,
+    scrollTrigger: { trigger: el, start: 'top 85%' }
+  });
+});
+
+// Sincronizar ScrollTrigger con Lenis
+lenis.on('scroll', ScrollTrigger.update);
+gsap.ticker.add(time => lenis.raf(time * 1000));
+gsap.ticker.lagSmoothing(0);
+
+/* =========================================================
+   5. Efecto magnético en botones
+========================================================= */
+document.querySelectorAll('.btn-magnetic').forEach(btn => {
+  btn.addEventListener('mousemove', e => {
+    const rect = btn.getBoundingClientRect();
+    const x = e.clientX - rect.left - rect.width / 2;
+    const y = e.clientY - rect.top - rect.height / 2;
+    btn.style.transform = `translate(${x * 0.25}px, ${y * 0.35}px)`;
+  });
+  btn.addEventListener('mouseleave', () => {
+    btn.style.transform = '';
+  });
+});
+</script>
+
+</body>
+</html>
